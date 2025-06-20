@@ -1,6 +1,6 @@
-#include "oxts_parser.hpp"
-#include "ekf_basic.hpp"
-#include "ekf_processor.hpp"
+#include "utils/oxts_parser.hpp"
+#include "ekf/ekf_vehicleModel.hpp"
+#include "ekf/ekf_processor.hpp"
 #include <iostream>
 #include <filesystem>
 #include <memory>
@@ -16,16 +16,25 @@ int main(int argc, char* argv[]) {
     const std::string ekf_result_csv = argv[3];
 
     try {
-        // Create the OXTSParser
         utils::OXTSParser parser(oxts_dir, oxts_log_csv);
 
-        // Create EKF instance
-        ekf::IEKFPtr ekf = std::make_unique<ekf::BasicEKF>();
+        // Instantiate EKF
+        auto vehicle_ekf = std::make_unique<ekf::VehicleEKF>();
 
-        // Create EKFProcessor with result and log file paths
-        ekf::EKFProcessor ekfProcessor(std::move(ekf), ekf_result_csv);
+        // --- Noise parameter tuning block ---
+        ekf::VehicleEKF::NoiseParams noise;
+        noise.lat_var = 1e-6;        // deg^2
+        noise.lon_var = 1e-6;        // deg^2
+        noise.v_var = 0.1;           // (m/s)^2
+        noise.yaw_var = 0.001;       // rad^2
+        noise.gnss_var = 2e-6;       // deg^2 (GNSS)
+        noise.vel_var = 0.04;        // (m/s)^2
+        noise.yaw_meas_var = 0.0025; // rad^2
+        vehicle_ekf->setNoiseParams(noise);
+        // --- End noise tuning block ---
 
-        // Step through each OXTSData record manually
+        ekf::EKFProcessor ekfProcessor(std::move(vehicle_ekf), ekf_result_csv);
+
         while (auto data = parser.next()) {
             ekfProcessor.process(*data);
         }
@@ -38,6 +47,5 @@ int main(int argc, char* argv[]) {
         std::cerr << "Fatal error: " << ex.what() << "\n";
         return 1;
     }
-
     return 0;
 }
