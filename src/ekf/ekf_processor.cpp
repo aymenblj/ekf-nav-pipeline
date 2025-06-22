@@ -31,14 +31,14 @@ Eigen::VectorXd EKFProcessor::process(const utils::OXTSData& data) {
     auto measurement = convertToMeasurement(data);
     if (measurement.size() != 6) throw std::runtime_error("Measurement vector size mismatch");
 
-    double dt = 0.1; // Default time step
-
     if (!last_) {
         Eigen::VectorXd x0(6);
         x0 << data.lat, data.lon, std::hypot(data.ve, data.vn), data.yaw, data.af, data.wz;
         Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(6, 6) * 1.0;
         ekf_->initialize(x0, P0);
     } else {
+        double dt = data.timelapse - last_->timelapse;
+
         ekf_->predict(dt, data.af, data.wz);
 
         // EKF update steps: only update with available (non-NaN) measurements

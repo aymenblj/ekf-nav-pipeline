@@ -1,5 +1,5 @@
 #include "utils/oxts_parser.hpp"
-
+#include "utils/timestamp_parser.hpp"
 #include <string>
 #include <limits>
 #include <cmath>
@@ -80,7 +80,7 @@ OXTSParser::OXTSParser(const std::filesystem::path& oxts_dir, const std::string&
 
     if (!logCSV.empty()) {
         logger_.emplace(logCSV, std::vector<std::string> {
-            "timestamp", "lat", "lon", "alt", "roll", "pitch", "yaw", 
+            "timestamp", "timelapse", "lat", "lon", "alt", "roll", "pitch", "yaw", 
             "vn", "ve", "vf", "vl", "vu",
             "ax", "ay", "az", "af", "al", "au",
             "wx", "wy", "wz", "wf", "wl", "wu",
@@ -95,6 +95,11 @@ std::optional<OXTSData> OXTSParser::next() {
     std::string ts_line;
     if (!std::getline(timestamp_stream_, ts_line)) {
         return std::nullopt; // no more data
+    }
+
+    if (first_read_) {
+        first_timestamp_ = ts_line;
+        first_read_ = false;
     }
 
     std::ostringstream fname;
@@ -112,6 +117,7 @@ std::optional<OXTSData> OXTSParser::next() {
 
     OXTSData data{};
     data.timestamp = ts_line;
+    data.timelapse = parse_timestamp(ts_line, first_timestamp_);
 
     auto members = getParseTuple(data);
     std::apply([&iss](auto&... member) {
@@ -120,7 +126,7 @@ std::optional<OXTSData> OXTSParser::next() {
 
     if (logger_) {
         std::apply([&](auto&&... args){
-            logger_->logRow(data.timestamp, std::forward<decltype(args)>(args)...);
+            logger_->logRow(data.timestamp, data.timelapse, std::forward<decltype(args)>(args)...);
         }, members);
     }
 

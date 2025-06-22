@@ -6,6 +6,13 @@
 
 namespace ekf {
 
+namespace {
+// ormalization to keep yaw within [-π, π].
+inline double wrapAngle(double angle) {
+    return std::atan2(std::sin(angle), std::cos(angle));
+}
+}
+
 VehicleEKF::VehicleEKF() 
     : x_(Eigen::VectorXd::Zero(6)),
       P_(Eigen::MatrixXd::Identity(6, 6)),
@@ -46,7 +53,7 @@ Eigen::VectorXd VehicleEKF::processModel(const Eigen::VectorXd& x, double dt) co
     x_pred(0) += dlat;
     x_pred(1) += dlon;
     x_pred(2) = new_v;
-    x_pred(3) = new_yaw;
+    x_pred(3) = wrapAngle(new_yaw);
     // af and wz are random walks (remain same)
     // x_pred(4) = af, x_pred(5) = wz
 
@@ -99,10 +106,14 @@ void VehicleEKF::genericUpdate(const Eigen::Ref<const Eigen::VectorXd>& residual
                                const Eigen::Ref<const Eigen::MatrixXd>& H,
                                const Eigen::Ref<const Eigen::MatrixXd>& R)
 {
-    const auto S = H * P_ * H.transpose() + R;
-    const auto K = P_ * H.transpose() * S.inverse();
-    x_ += K * residual;
-    P_ = (Eigen::MatrixXd::Identity(x_.size(), x_.size()) - K * H) * P_;
+    const Eigen::MatrixXd S = H * P_ * H.transpose() + R; // Innovation covariance
+    Eigen::MatrixXd K = P_ * H.transpose();               // Kalman gain numerator
+    // Solve S * X = K^T, so K = (S.ldlt().solve(K.transpose())).transpose()
+    K = S.ldlt().solve(K.transpose()).transpose();
+
+    x_.noalias() += K * residual;
+    x_(3) = wrapAngle(x_(3));
+    P_.noalias() -= K * H * P_;
 }
 
 void VehicleEKF::updateGNSS(const Eigen::Vector2d& gnss_pos, const Eigen::Matrix2d& R) {

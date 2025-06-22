@@ -69,6 +69,7 @@ struct OXTSData {
     int velmode = 0;
     int orimode = 0;
 
+    double timelapse = 0;
     std::string timestamp;
 
     /**
@@ -98,5 +99,4 @@ struct OXTSData {
         return !std::isnan(lat) && !std::isnan(lon);
     }
 };
-
 } // namespace utils

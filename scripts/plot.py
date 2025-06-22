@@ -6,8 +6,8 @@ import numpy as np
 raw = pd.read_csv("../build/oxts_out.csv", parse_dates=["timestamp"])
 ekf = pd.read_csv("../build/ekf_out.csv", parse_dates=["timestamp"])
 
-# raw = raw.iloc[:40]
-# ekf = ekf.iloc[:40]
+# raw = raw.iloc[:1000]
+# ekf = ekf.iloc[:1000]
 
 # --- Calculate raw speed magnitude ---
 if "ve" in raw.columns and "vn" in raw.columns:

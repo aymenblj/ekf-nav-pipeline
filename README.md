@@ -1,6 +1,6 @@
 # NavStream
 
-NavStream is a C++ Extended Kalman Filter (EKF) framework for vehicle localization using GNSS + IMU fusion, with robust dead-reckoning during GNSS outages. This EKF estimates position, velocity, and attitude from real-world sensor logs (e.g., KITTI OXTS), supporting configurable prediction models and noise parameters.
+NavStream is a C++ Extended Kalman Filter (EKF) framework for vehicle localization using GNSS + IMU fusion, with robust dead-reckoning during GNSS outages. This EKF estimates position, velocity, and attitude from real-world sensor logs (e.g., KITTI dataset OXTS), supporting configurable prediction models and noise parameters.
 
 ---
 
@@ -17,6 +17,8 @@ cmake --build build
 
 ```sh
 .\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0013_gps_loss/oxts oxts_out.csv ekf_out.csv
+.\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0001_unsync/oxts oxts_out.csv ekf_out.csv
+.\NavStream.exe ../data/2011_10_03/2011_10_03_drive_0042_unsync/oxts oxts_out.csv ekf_out.csv
 ```
 
 - **First argument:** Path to OXTS directory (e.g., from KITTI dataset)

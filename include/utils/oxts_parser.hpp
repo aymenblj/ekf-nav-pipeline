@@ -45,6 +45,7 @@ private:
     size_t index_ = 0;                   ///< Current file index.
     std::string resultCSVPath_;          ///< CSV log file path (if logging enabled).
     std::optional<Logger> logger_;       ///< Optional logger for parsed values.
+    std::string first_timestamp_;        ///< Stores the first timestamp for timelapse calculation.
+    bool first_read_ = true;             ///< True until first timestamp is read.
 };
-
 } // namespace utils
