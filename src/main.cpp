@@ -1,6 +1,7 @@
 #include "utils/oxts_parser.hpp"
 #include "ekf/ekf_vehicleModel.hpp"
 #include "ekf/ekf_processor.hpp"
+#include "gui/gui_plotter.hpp"
 #include <iostream>
 #include <filesystem>
 #include <memory>
@@ -18,30 +19,33 @@ int main(int argc, char* argv[]) {
     try {
         utils::OXTSParser parser(oxts_dir, oxts_log_csv);
 
-        // Instantiate EKF
         auto vehicle_ekf = std::make_unique<ekf::VehicleEKF>();
-
-        // --- Noise parameter tuning block ---
         ekf::VehicleEKF::NoiseParams noise;
-        noise.lat_var = 1e-6;        // deg^2
-        noise.lon_var = 1e-6;        // deg^2
-        noise.v_var = 0.1;           // (m/s)^2
-        noise.yaw_var = 0.001;       // rad^2
-        noise.gnss_var = 2e-6;       // deg^2 (GNSS)
-        noise.vel_var = 0.04;        // (m/s)^2
-        noise.yaw_meas_var = 0.0025; // rad^2
+        noise.lat_var = 1e-6;
+        noise.lon_var = 1e-6;
+        noise.v_var = 0.1;
+        noise.yaw_var = 0.001;
+        noise.gnss_var = 2e-6;
+        noise.vel_var = 0.04;
+        noise.yaw_meas_var = 0.0025;
         vehicle_ekf->setNoiseParams(noise);
-        // --- End noise tuning block ---
 
         ekf::EKFProcessor ekfProcessor(std::move(vehicle_ekf), ekf_result_csv);
 
+        GuiPlotter plotter;
+        plotter.startGui(); // Launch background GUI thread
+
         while (auto data = parser.next()) {
-            ekfProcessor.process(*data);
+            auto state = ekfProcessor.process(*data);
+            plotter.handleData(*data, state);
+            plotter.realtimeSleep(data->timelapse);
         }
 
         std::cout << "Processed " << ekfProcessor.results().size() << " EKF states.\n";
         std::cout << "OXTS data logged to: " << oxts_log_csv << "\n";
         std::cout << "EKF results logged to: " << ekf_result_csv << "\n";
+
+        plotter.stopGui(); // Clean up and exit GUI
 
     } catch (const std::exception& ex) {
         std::cerr << "Fatal error: " << ex.what() << "\n";

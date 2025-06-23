@@ -1,27 +1,39 @@
 #pragma once
-
-#include <vector>
-#include <functional>
+#include "utils/oxts_parser.hpp"
+#include <Eigen/Dense>
 #include <mutex>
+#include <vector>
+#include <thread>
 #include <atomic>
+#include <chrono>
 
 class GuiPlotter {
 public:
     GuiPlotter();
     ~GuiPlotter();
 
-    void add_ekf_estimate(double timestamp, const std::vector<double>& values);
-
-    // Run the GUI loop and streaming function
-    void run(std::function<void()> stream_func);
+    void startGui();
+    void handleData(const utils::OXTSData& data, const Eigen::VectorXd& ekf_state);
+    void realtimeSleep(double timelapse);
+    void stopGui();
 
 private:
-    // Plot data
-    std::vector<double> ts_;
-    std::vector<double> ts_ekf_, xs_ekf_, ys_ekf_;
+    struct PlotData {
+        std::vector<double> xs, ys, vs;
+    };
 
     std::mutex mtx_;
-    std::atomic<bool> running_;
-    std::atomic<bool> zoom_out_full_;
-    std::atomic<bool> zoom_stabilized_{false};
+    PlotData ekf_data_, meas_data_;
+    bool origin_set_ = false;
+    double lat0_ = 0.0, lon0_ = 0.0;
+    std::atomic<bool> running_{false};
+    std::thread gui_thread_;
+
+    // Real-time playback state
+    bool realtime_first_ = true;
+    double realtime_t0_ = 0.0;
+    double realtime_last_timelapse_ = -1.0;
+    std::chrono::steady_clock::time_point realtime_wall_start_;
+
+    void guiLoop();
 };

@@ -1,227 +1,232 @@
 #include "gui/gui_plotter.hpp"
+#include "utils/UTMConverter.hpp"
 #include <imgui.h>
 #include <implot.h>
 #include <GLFW/glfw3.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
-#include <algorithm>
-#include <vector>
-#include <mutex>
-#include <thread>
-#include <atomic>
-#include <iostream>
-#include <exception>
 #include <cmath>
-#include <iomanip>
+#include <limits>
+#include <algorithm>
+#include <iostream>
 
-GuiPlotter::GuiPlotter() : running_(false), zoom_out_full_(false) {
-    std::cout << "[GuiPlotter] Constructed.\n";
+namespace {
+double get_zoom_from_speed(double speed_kmh, double min_zoom = 40.0, double max_zoom = 250.0) {
+    // City speeds (0-50 km/h): tight zoom (40-70)
+    // Suburban/arterial (50-90 km/h): mid zoom (70-160)
+    // Highway (90-130 km/h): full zoom (160-250)
+    if (std::isnan(speed_kmh) || speed_kmh < 0.0) speed_kmh = 0.0;
+    if (speed_kmh > 130.0) speed_kmh = 130.0; // Most cars won't exceed this
+    double alpha = speed_kmh / 130.0;
+    return min_zoom + (max_zoom - min_zoom) * (alpha * alpha);
+}
 }
 
+GuiPlotter::GuiPlotter() {}
 GuiPlotter::~GuiPlotter() {
+    stopGui();
+}
+
+void GuiPlotter::startGui() {
+    running_ = true;
+    gui_thread_ = std::thread(&GuiPlotter::guiLoop, this);
+}
+
+void GuiPlotter::stopGui() {
     running_ = false;
-    std::cout << "[GuiPlotter] Destructor called.\n";
+    if (gui_thread_.joinable())
+        gui_thread_.join();
 }
 
-void GuiPlotter::add_ekf_estimate(double timestamp, const std::vector<double>& values) {
-    if (std::isnan(timestamp) || std::isinf(timestamp)) {
-        std::cout << "[GuiPlotter] Warning: Invalid EKF timestamp: " << timestamp << "\n";
-        return;
+void GuiPlotter::handleData(const utils::OXTSData& data, const Eigen::VectorXd& ekf_state) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (!origin_set_) {
+        lat0_ = ekf_state(0);
+        lon0_ = ekf_state(1);
+        origin_set_ = true;
     }
-    if (values.size() >= 2 && std::isfinite(values[0]) && std::isfinite(values[1])) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        ts_ekf_.push_back(timestamp);
-        xs_ekf_.push_back(values[0]);
-        ys_ekf_.push_back(values[1]);
-        std::cout << std::fixed << std::setprecision(9);
-        std::cout << "[GuiPlotter] EKF point: t=" << timestamp
-                  << " x=" << values[0] << " y=" << values[1] << std::endl;
+    // Convert EKF state to local XY and km/h
+    auto [ekf_x, ekf_y] = utils::UTMConverter::latlonToLocalXY(ekf_state(0), ekf_state(1), lat0_, lon0_);
+    double ekf_v_kmh = ekf_state(2) * 3.6; // EKF velocity assumed in m/s
+    ekf_data_.xs.push_back(ekf_x);
+    ekf_data_.ys.push_back(ekf_y);
+    ekf_data_.vs.push_back(ekf_v_kmh);
+
+    // GNSS measurement to local XY and km/h
+    auto [meas_x, meas_y] = utils::UTMConverter::latlonToLocalXY(data.lat, data.lon, lat0_, lon0_);
+    double gnss_v_kmh = std::hypot(data.ve, data.vn) * 3.6; // GNSS velocity in m/s -> km/h
+    meas_data_.xs.push_back(meas_x);
+    meas_data_.ys.push_back(meas_y);
+    meas_data_.vs.push_back(gnss_v_kmh);
+}
+
+void GuiPlotter::realtimeSleep(double timelapse) {
+    if (realtime_first_) {
+        realtime_t0_ = timelapse;
+        realtime_last_timelapse_ = timelapse;
+        realtime_wall_start_ = std::chrono::steady_clock::now();
+        realtime_first_ = false;
     } else {
-        std::cout << "[GuiPlotter] Warning: Invalid or insufficient EKF values (size=" << values.size() << ")\n";
+        double dt = timelapse - realtime_last_timelapse_;
+        if (dt > 0) {
+            auto target = realtime_wall_start_ + std::chrono::duration<double>(timelapse - realtime_t0_);
+            std::this_thread::sleep_until(target);
+        }
+        realtime_last_timelapse_ = timelapse;
     }
 }
 
-void GuiPlotter::run(std::function<void()> stream_func) {
-    std::cout << "[GuiPlotter] Starting run().\n";
+void GuiPlotter::guiLoop() {
     if (!glfwInit()) {
-        std::cout << "[GuiPlotter] Failed to initialize GLFW.\n";
+        std::cerr << "[GuiPlotter] Failed to initialize GLFW.\n";
         return;
     }
-    std::cout << "[GuiPlotter] GLFW initialized.\n";
-
     GLFWwindow* window = glfwCreateWindow(1600, 1000, "NavPlotterPro", nullptr, nullptr);
     if (!window) {
-        std::cout << "[GuiPlotter] Failed to create GLFW window.\n";
+        std::cerr << "[GuiPlotter] Failed to create GLFW window.\n";
         glfwTerminate();
         return;
     }
-    std::cout << "[GuiPlotter] GLFW window created.\n";
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
-    try {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImPlot::CreateContext();
-        ImGui::StyleColorsDark();
-        ImGui_ImplGlfw_InitForOpenGL(window, true);
-        ImGui_ImplOpenGL3_Init("#version 130");
-        std::cout << "[GuiPlotter] ImGui and ImPlot initialized.\n";
-    } catch (const std::exception& e) {
-        std::cout << "[GuiPlotter] Exception during ImGui/ImPlot init: " << e.what() << "\n";
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        return;
-    } catch (...) {
-        std::cout << "[GuiPlotter] Unknown error during ImGui/ImPlot init.\n";
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        return;
-    }
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImPlot::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 130");
 
-    running_ = true;
+    bool zoom_out_full = false;
 
-    std::thread streaming_thread([this, stream_func]() {
-        std::cout << "[GuiPlotter] Streaming thread started.\n";
-        try {
-            if (stream_func) stream_func();
-            std::cout << "[GuiPlotter] Streaming finished.\n";
-        } catch (const std::exception& e) {
-            std::cout << "[GuiPlotter] Exception in streaming thread: " << e.what() << "\n";
-        } catch (...) {
-            std::cout << "[GuiPlotter] Unknown error in streaming thread.\n";
+    while (running_ && !glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h), ImGuiCond_Always);
+        ImGui::Begin("Trajectory Plot", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+
+        PlotData ekf, meas;
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            ekf = ekf_data_;
+            meas = meas_data_;
         }
-        zoom_out_full_ = true;
-        running_ = false;
-    });
 
-    std::cout << "[GuiPlotter] Entering main GUI loop.\n";
-    try {
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
+        ImGui::Text("EKF Points: %zu", ekf.xs.size());
+        ImGui::Text("Measurement Points: %zu", meas.xs.size());
 
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
+        double speed = 0.0;
+        if (!ekf.vs.empty() && std::isfinite(ekf.vs.back()))
+            speed = ekf.vs.back();
+        else if (!meas.vs.empty() && std::isfinite(meas.vs.back()))
+            speed = meas.vs.back();
+        if (speed > 0)
+            ImGui::Text("EKF Speed: %.2f km/h", speed);
+        else
+            ImGui::Text("Speed: N/A");
 
-            ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-            int display_w, display_h;
-            glfwGetFramebufferSize(window, &display_w, &display_h);
-            ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h), ImGuiCond_Always);
-            ImGui::Begin("Trajectory Plot", nullptr,
-                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+        if ((!ekf.xs.empty() && !ekf.ys.empty()) || (!meas.xs.empty() && !meas.ys.empty())) {
+            ImVec2 plot_size = ImGui::GetContentRegionAvail();
 
-            std::vector<double> xs_ekf, ys_ekf;
-            {
-                std::lock_guard<std::mutex> lock(mtx_);
-                xs_ekf = xs_ekf_;
-                ys_ekf = ys_ekf_;
-            }
+            if (ImPlot::BeginPlot("##Trajectory", plot_size)) {
+                ImPlot::SetupAxes("X [m]", "Y [m]");
+                if (zoom_out_full) {
+                    double x_min = INFINITY, x_max = -INFINITY, y_min = INFINITY, y_max = -INFINITY;
+                    auto fit_bounds = [&](const std::vector<double>& xs, const std::vector<double>& ys) {
+                        if (!xs.empty()) {
+                            auto [min_x, max_x] = std::minmax_element(xs.begin(), xs.end());
+                            auto [min_y, max_y] = std::minmax_element(ys.begin(), ys.end());
+                            x_min = std::min(x_min, *min_x); x_max = std::max(x_max, *max_x);
+                            y_min = std::min(y_min, *min_y); y_max = std::max(y_max, *max_y);
+                        }
+                    };
+                    fit_bounds(ekf.xs, ekf.ys);
+                    fit_bounds(meas.xs, meas.ys);
 
-            ImGui::Text("EKF Points: %zu", xs_ekf.size());
-            if (!xs_ekf.empty() && !ys_ekf.empty()) {
-                ImVec2 plot_size = ImGui::GetContentRegionAvail();
-
-                if (ImPlot::BeginPlot("##Trajectory", plot_size)) {
-                    ImPlot::SetupAxes("X [m]", "Y [m]");
-
-                    if (zoom_out_full_) {
-                        double x_min = *std::min_element(xs_ekf.begin(), xs_ekf.end());
-                        double x_max = *std::max_element(xs_ekf.begin(), xs_ekf.end());
-                        double y_min = *std::min_element(ys_ekf.begin(), ys_ekf.end());
-                        double y_max = *std::max_element(ys_ekf.begin(), ys_ekf.end());
-                        double x_pad = (x_max - x_min) * 0.03;
-                        double y_pad = (y_max - y_min) * 0.03;
-                        ImPlot::SetupAxisLimits(ImAxis_X1, x_min - x_pad, x_max + x_pad, ImGuiCond_Always);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, y_min - y_pad, y_max + y_pad, ImGuiCond_Always);
-                    } else {
-                        double cx = xs_ekf.back();
-                        double cy = ys_ekf.back();
-                        double x_min = *std::min_element(xs_ekf.begin(), xs_ekf.end());
-                        double x_max = *std::max_element(xs_ekf.begin(), xs_ekf.end());
-                        double y_min = *std::min_element(ys_ekf.begin(), ys_ekf.end());
-                        double y_max = *std::max_element(ys_ekf.begin(), ys_ekf.end());
-                        double xrange = x_max - x_min + 1e-8;
-                        double yrange = y_max - y_min + 1e-8;
-                        double min_range = 0.001;
-                        double xw = std::max(xrange * 1.15, min_range);
-                        double yw = std::max(yrange * 1.15, min_range);
-                        ImPlot::SetupAxisLimits(ImAxis_X1, cx - xw / 2, cx + xw / 2, ImGuiCond_Always);
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, cy - yw / 2, cy + yw / 2, ImGuiCond_Always);
+                    double x_pad = std::max(2.0, (x_max - x_min) * 0.10);
+                    double y_pad = std::max(2.0, (y_max - y_min) * 0.10);
+                    ImPlot::SetupAxisLimits(ImAxis_X1, x_min - x_pad, x_max + x_pad, ImGuiCond_Always);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, y_min - y_pad, y_max + y_pad, ImGuiCond_Always);
+                } else {
+                    constexpr double min_zoom = 40.0;
+                    constexpr double max_zoom = 250.0;
+                    double zoom = get_zoom_from_speed(speed, min_zoom, max_zoom);
+                    if (!ekf.xs.empty()) {
+                        double cx = ekf.xs.back(), cy = ekf.ys.back();
+                        ImPlot::SetupAxisLimits(ImAxis_X1, cx - zoom / 2, cx + zoom / 2, ImGuiCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, cy - zoom / 2, cy + zoom / 2, ImGuiCond_Always);
+                    } else if (!meas.xs.empty()) {
+                        double cx = meas.xs.back(), cy = meas.ys.back();
+                        ImPlot::SetupAxisLimits(ImAxis_X1, cx - zoom / 2, cx + zoom / 2, ImGuiCond_Always);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, cy - zoom / 2, cy + zoom / 2, ImGuiCond_Always);
                     }
-
-                    ImPlot::SetNextLineStyle(ImVec4(1.f, 0.2f, 0.2f, 1.f), 2.0f);
-                    ImPlot::PlotLine("EKF", xs_ekf.data(), ys_ekf.data(), (int)xs_ekf.size());
-
-                    // Car marker for EKF
-                    double cx = xs_ekf.back();
-                    double cy = ys_ekf.back();
-                    ImPlot::PlotScatter("Car", &cx, &cy, 1);
-
-                    double vx = 0, vy = 0;
-                    if (xs_ekf.size() >= 2) {
-                        vx = xs_ekf.back() - xs_ekf[xs_ekf.size() - 2];
-                        vy = ys_ekf.back() - ys_ekf[ys_ekf.size() - 2];
-                    }
-                    double norm = std::sqrt(vx * vx + vy * vy);
-                    if (norm < 1e-10) { vx = 1; vy = 0; norm = 1; }
-                    vx /= norm; vy /= norm;
-
-                    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-
-                    double arrow_size = 2.0;
-                    double tip_x = cx + vx * arrow_size;
-                    double tip_y = cy + vy * arrow_size;
-                    double left_x = cx - vx * arrow_size * 0.5 + vy * arrow_size * 0.5;
-                    double left_y = cy - vy * arrow_size * 0.5 - vx * arrow_size * 0.5;
-                    double right_x = cx - vx * arrow_size * 0.5 - vy * arrow_size * 0.5;
-                    double right_y = cy - vy * arrow_size * 0.5 + vx * arrow_size * 0.5;
-
-                    ImVec2 tip = ImPlot::PlotToPixels(tip_x, tip_y);
-                    ImVec2 left = ImPlot::PlotToPixels(left_x, left_y);
-                    ImVec2 right = ImPlot::PlotToPixels(right_x, right_y);
-
-                    draw_list->AddTriangleFilled(tip, left, right, IM_COL32(255, 200, 0, 255));
-                    draw_list->AddTriangle(tip, left, right, IM_COL32(120, 70, 0, 255));
-
-                    ImPlot::EndPlot();
                 }
-            } else {
-                ImGui::Text("No EKF data received yet.");
+
+                if (!ekf.xs.empty() && !ekf.ys.empty())
+                    ImPlot::PlotLine("EKF", ekf.xs.data(), ekf.ys.data(), (int)ekf.xs.size());
+                if (!meas.xs.empty() && !meas.ys.empty())
+                    ImPlot::PlotScatter("Measurement", meas.xs.data(), meas.ys.data(), (int)meas.xs.size());
+
+                // Draw sedan at latest EKF position
+                if (!ekf.xs.empty() && !ekf.ys.empty()) {
+                    double cx = ekf.xs.back(), cy = ekf.ys.back();
+                    double theta = 0.0;
+                    if (ekf.xs.size() >= 2) {
+                        double dx = ekf.xs.back() - ekf.xs[ekf.xs.size()-2];
+                        double dy = ekf.ys.back() - ekf.ys[ekf.ys.size()-2];
+                        if (std::abs(dx) > 1e-6 || std::abs(dy) > 1e-6)
+                            theta = std::atan2(dy, dx);
+                    }
+                    constexpr double L = 4.5, W = 1.8, hl = L/2.0, hw = W/2.0;
+                    struct Pt { double x, y; };
+                    Pt corners[4] = {
+                        {+hl, +hw}, {+hl, -hw}, {-hl, -hw}, {-hl, +hw}
+                    };
+                    ImVec2 poly[4];
+                    for (int i = 0; i < 4; ++i) {
+                        double wx = cx + (corners[i].x * std::cos(theta) - corners[i].y * std::sin(theta));
+                        double wy = cy + (corners[i].x * std::sin(theta) + corners[i].y * std::cos(theta));
+                        poly[i] = ImPlot::PlotToPixels(wx, wy);
+                    }
+                    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+                    draw_list->AddConvexPolyFilled(poly, 4, IM_COL32(30, 144, 255, 180));
+                    draw_list->AddPolyline(poly, 4, IM_COL32(30, 144, 255, 255), true, 2.0f);
+                    ImVec2 nose_center = ImPlot::PlotToPixels(
+                        cx + hl * std::cos(theta),
+                        cy + hl * std::sin(theta)
+                    );
+                    ImVec2 car_center = ImPlot::PlotToPixels(cx, cy);
+                    draw_list->AddLine(car_center, nose_center, IM_COL32(0,0,0,255), 3.0f);
+                }
+                ImPlot::EndPlot();
             }
-
-            ImGui::End();
-
-            ImGui::Render();
-            glfwGetFramebufferSize(window, &display_w, &display_h);
-            glViewport(0, 0, display_w, display_h);
-            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-            glfwSwapBuffers(window);
+        } else {
+            ImGui::Text("No EKF or measurement data received yet.");
         }
-        std::cout << "[GuiPlotter] Exiting main GUI loop.\n";
-    } catch (const std::exception& e) {
-        std::cout << "[GuiPlotter] Exception in GUI loop: " << e.what() << "\n";
-    } catch (...) {
-        std::cout << "[GuiPlotter] Unknown error in GUI loop.\n";
+        ImGui::End();
+
+        ImGui::Render();
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(window);
     }
 
-    running_ = false;
-    if (streaming_thread.joinable()) {
-        std::cout << "[GuiPlotter] Waiting for streaming thread to join...\n";
-        streaming_thread.join();
-        std::cout << "[GuiPlotter] Streaming thread joined.\n";
-    }
-
-    std::cout << "[GuiPlotter] Shutting down ImGui/ImPlot/GLFW.\n";
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
-    std::cout << "[GuiPlotter] Clean shutdown complete.\n";
 }

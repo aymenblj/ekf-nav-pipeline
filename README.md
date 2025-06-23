@@ -18,7 +18,7 @@ cmake --build build
 ```sh
 .\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0013_gps_loss/oxts oxts_out.csv ekf_out.csv
 .\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0001_unsync/oxts oxts_out.csv ekf_out.csv
-.\NavStream.exe ../data/2011_10_03/2011_10_03_drive_0042_unsync/oxts oxts_out.csv ekf_out.csv
+.\NavStream.exe ../data/2011_10_03/2011_10_03_drive_0042_unsync_gps_loss/oxts oxts_out.csv ekf_out.csv
 ```
 
 - **First argument:** Path to OXTS directory (e.g., from KITTI dataset)
