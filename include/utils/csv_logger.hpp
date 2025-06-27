@@ -44,10 +44,10 @@ public:
      * @brief Construct a new Logger object and write the CSV header.
      * @param filepath  Output file path for the CSV.
      * @param header    Vector of column names for the header row.
-     * @param precision Number of decimal places for floating-point output (default: 10).
+     * @param precision Number of decimal places for floating-point output (default: 8).
      * @throws std::runtime_error if the file cannot be opened.
      */
-    Logger(const std::string& filepath, std::vector<std::string> header, int precision = 10)
+    Logger(const std::string& filepath, std::vector<std::string> header, int precision = 8)
         : out_(filepath), header_(std::move(header)) {
         if (!out_.is_open()) {
             throw std::runtime_error("Failed to open file: " + filepath);

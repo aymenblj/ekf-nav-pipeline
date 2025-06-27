@@ -10,6 +10,43 @@
 
 namespace utils {
 
+// parseSafe declarations and specializations
+
+template<typename T>
+void parseSafe(std::stringstream& stream, T& value);
+
+// Specialization for double
+template<>
+inline void parseSafe<double>(std::stringstream& stream, double& value) {
+    std::string token;
+    stream >> token;
+    if (token == "NAN" || token == "nan") {
+        value = NAN;
+    } else {
+        try {
+            value = std::stold(token);
+        } catch (...) {
+            value = NAN;
+        }
+    }
+}
+
+// Specialization for int
+template<>
+inline void parseSafe<int>(std::stringstream& stream, int& value) {
+    std::string token;
+    stream >> token;
+    if (token == "NAN" || token == "nan") {
+        value = std::numeric_limits<int>::min(); // sentinel for invalid int
+    } else {
+        try {
+            value = std::stoi(token);
+        } catch (...) {
+            value = std::numeric_limits<int>::min();
+        }
+    }
+}
+
 /**
  * @brief Parser for OXTS data directories (e.g., KITTI dataset).
  *

@@ -1,5 +1,5 @@
 #include "gui/gui_plotter.hpp"
-#include "utils/UTMConverter.hpp"
+#include "utils/utm_converter.hpp"
 #include <imgui.h>
 #include <implot.h>
 #include <GLFW/glfw3.h>

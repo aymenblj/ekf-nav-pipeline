@@ -14,43 +14,6 @@
 
 namespace utils {
 
-// parseSafe declarations and specializations
-
-template<typename T>
-void parseSafe(std::stringstream& stream, T& value);
-
-// Specialization for long double
-template<>
-void parseSafe<long double>(std::stringstream& stream, long double& value) {
-    std::string token;
-    stream >> token;
-    if (token == "NAN" || token == "nan") {
-        value = NAN;
-    } else {
-        try {
-            value = std::stold(token);
-        } catch (...) {
-            value = NAN;
-        }
-    }
-}
-
-// Specialization for int
-template<>
-void parseSafe<int>(std::stringstream& stream, int& value) {
-    std::string token;
-    stream >> token;
-    if (token == "NAN" || token == "nan") {
-        value = std::numeric_limits<int>::min(); // sentinel for invalid int
-    } else {
-        try {
-            value = std::stoi(token);
-        } catch (...) {
-            value = std::numeric_limits<int>::min();
-        }
-    }
-}
-
 // Helper to get tuple of references to all members (except timestamp)
 inline auto getParseTuple(OXTSData& d) {
     return std::tie(
@@ -113,7 +76,6 @@ std::optional<OXTSData> OXTSParser::next() {
     std::string data_line;
     std::getline(data_file, data_line);
     std::stringstream iss(data_line);
-    iss.precision(18);
 
     OXTSData data{};
     data.timestamp = ts_line;

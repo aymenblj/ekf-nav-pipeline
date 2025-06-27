@@ -30,38 +30,38 @@ namespace utils {
  * - timestamp: Timestamp string for this record
  */
 struct OXTSData {
-    long double lat = std::numeric_limits<long double>::quiet_NaN();
-    long double lon = std::numeric_limits<long double>::quiet_NaN();
-    long double alt = std::numeric_limits<long double>::quiet_NaN();
+    double lat = std::numeric_limits<double>::quiet_NaN();
+    double lon = std::numeric_limits<double>::quiet_NaN();
+    double alt = std::numeric_limits<double>::quiet_NaN();
 
-    long double roll = std::numeric_limits<long double>::quiet_NaN();
-    long double pitch = std::numeric_limits<long double>::quiet_NaN();
-    long double yaw = std::numeric_limits<long double>::quiet_NaN();
+    double roll = std::numeric_limits<double>::quiet_NaN();
+    double pitch = std::numeric_limits<double>::quiet_NaN();
+    double yaw = std::numeric_limits<double>::quiet_NaN();
 
-    long double vn = std::numeric_limits<long double>::quiet_NaN();
-    long double ve = std::numeric_limits<long double>::quiet_NaN();
-    long double vf = std::numeric_limits<long double>::quiet_NaN();
-    long double vl = std::numeric_limits<long double>::quiet_NaN();
-    long double vu = std::numeric_limits<long double>::quiet_NaN();
+    double vn = std::numeric_limits<double>::quiet_NaN();
+    double ve = std::numeric_limits<double>::quiet_NaN();
+    double vf = std::numeric_limits<double>::quiet_NaN();
+    double vl = std::numeric_limits<double>::quiet_NaN();
+    double vu = std::numeric_limits<double>::quiet_NaN();
 
-    long double ax = std::numeric_limits<long double>::quiet_NaN();
-    long double ay = std::numeric_limits<long double>::quiet_NaN();
-    long double az = std::numeric_limits<long double>::quiet_NaN();
+    double ax = std::numeric_limits<double>::quiet_NaN();
+    double ay = std::numeric_limits<double>::quiet_NaN();
+    double az = std::numeric_limits<double>::quiet_NaN();
 
-    long double af = std::numeric_limits<long double>::quiet_NaN();
-    long double al = std::numeric_limits<long double>::quiet_NaN();
-    long double au = std::numeric_limits<long double>::quiet_NaN();
+    double af = std::numeric_limits<double>::quiet_NaN();
+    double al = std::numeric_limits<double>::quiet_NaN();
+    double au = std::numeric_limits<double>::quiet_NaN();
 
-    long double wx = std::numeric_limits<long double>::quiet_NaN();
-    long double wy = std::numeric_limits<long double>::quiet_NaN();
-    long double wz = std::numeric_limits<long double>::quiet_NaN();
+    double wx = std::numeric_limits<double>::quiet_NaN();
+    double wy = std::numeric_limits<double>::quiet_NaN();
+    double wz = std::numeric_limits<double>::quiet_NaN();
 
-    long double wf = std::numeric_limits<long double>::quiet_NaN();
-    long double wl = std::numeric_limits<long double>::quiet_NaN();
-    long double wu = std::numeric_limits<long double>::quiet_NaN();
+    double wf = std::numeric_limits<double>::quiet_NaN();
+    double wl = std::numeric_limits<double>::quiet_NaN();
+    double wu = std::numeric_limits<double>::quiet_NaN();
 
-    long double pos_accuracy = std::numeric_limits<long double>::quiet_NaN();
-    long double vel_accuracy = std::numeric_limits<long double>::quiet_NaN();
+    double pos_accuracy = std::numeric_limits<double>::quiet_NaN();
+    double vel_accuracy = std::numeric_limits<double>::quiet_NaN();
 
     int navstat = 0;
     int numsats = 0;
