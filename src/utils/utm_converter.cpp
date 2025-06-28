@@ -2,16 +2,17 @@
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
+#include <numbers>
 
 namespace utils {
 
 constexpr double WGS84_A = 6378137.0;
 constexpr double WGS84_ECCSQ = 0.00669437999014;
-constexpr double M_PI = 3.14159265358979323846;
+constexpr double pi = std::numbers::pi;
 constexpr double K0 = 0.9996;
 
-static double deg2rad(double deg) { return deg * M_PI / 180.0; }
-static double rad2deg(double rad) { return rad * 180.0 / M_PI; }
+static double deg2rad(double deg) { return deg * pi / 180.0; }
+static double rad2deg(double rad) { return rad * 180.0 / pi; }
 
 char UTMConverter::latitudeToZoneLetter(double latitude) {
     if (latitude < -80) return 'C';

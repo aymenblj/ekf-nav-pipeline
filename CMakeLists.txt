@@ -29,7 +29,6 @@ set(IMPLOT_SOURCES
 )
 
 # Eigen include handling (header-only)
-# eigen_SOURCE_DIR is set by FetchContent in pullDependencies.cmake and should point to the directory containing Eigen/Dense
 set(EXTRA_INCLUDES "${eigen_SOURCE_DIR}")
 
 add_executable(${PROJECT_NAME}
@@ -53,17 +52,11 @@ target_link_libraries(${PROJECT_NAME}
         glfw
 )
 
-# Link OpenGL on Windows
-if (WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32)
-endif()
+# Cross-platform OpenGL linking
+find_package(OpenGL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 
-# Link pthread on Linux
-if (UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
-endif()
-
-# Automatic Linking for Threads
+# Cross-platform Threads
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 

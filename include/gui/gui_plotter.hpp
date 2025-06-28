@@ -16,6 +16,7 @@ public:
     void handleData(const utils::OXTSData& data, const Eigen::VectorXd& ekf_state);
     void realtimeSleep(double timelapse);
     void stopGui();
+    bool isRunning() const { return running_;}
 
 private:
     struct PlotData {

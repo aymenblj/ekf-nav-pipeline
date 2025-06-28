@@ -10,13 +10,11 @@
 #include <algorithm>
 #include <iostream>
 
+// --- Utility for zoom ---
 namespace {
 double get_zoom_from_speed(double speed_kmh, double min_zoom = 40.0, double max_zoom = 250.0) {
-    // City speeds (0-50 km/h): tight zoom (40-70)
-    // Suburban/arterial (50-90 km/h): mid zoom (70-160)
-    // Highway (90-130 km/h): full zoom (160-250)
     if (std::isnan(speed_kmh) || speed_kmh < 0.0) speed_kmh = 0.0;
-    if (speed_kmh > 130.0) speed_kmh = 130.0; // Most cars won't exceed this
+    if (speed_kmh > 130.0) speed_kmh = 130.0;
     double alpha = speed_kmh / 130.0;
     return min_zoom + (max_zoom - min_zoom) * (alpha * alpha);
 }
@@ -34,7 +32,8 @@ void GuiPlotter::startGui() {
 
 void GuiPlotter::stopGui() {
     running_ = false;
-    if (gui_thread_.joinable())
+    // Only join if not in the same thread!
+    if (gui_thread_.joinable() && std::this_thread::get_id() != gui_thread_.get_id())
         gui_thread_.join();
 }
 
@@ -45,16 +44,14 @@ void GuiPlotter::handleData(const utils::OXTSData& data, const Eigen::VectorXd& 
         lon0_ = ekf_state(1);
         origin_set_ = true;
     }
-    // Convert EKF state to local XY and km/h
     auto [ekf_x, ekf_y] = utils::UTMConverter::latlonToLocalXY(ekf_state(0), ekf_state(1), lat0_, lon0_);
-    double ekf_v_kmh = ekf_state(2) * 3.6; // EKF velocity assumed in m/s
+    double ekf_v_kmh = ekf_state(2) * 3.6;
     ekf_data_.xs.push_back(ekf_x);
     ekf_data_.ys.push_back(ekf_y);
     ekf_data_.vs.push_back(ekf_v_kmh);
 
-    // GNSS measurement to local XY and km/h
     auto [meas_x, meas_y] = utils::UTMConverter::latlonToLocalXY(data.lat, data.lon, lat0_, lon0_);
-    double gnss_v_kmh = std::hypot(data.ve, data.vn) * 3.6; // GNSS velocity in m/s -> km/h
+    double gnss_v_kmh = std::hypot(data.ve, data.vn) * 3.6;
     meas_data_.xs.push_back(meas_x);
     meas_data_.ys.push_back(meas_y);
     meas_data_.vs.push_back(gnss_v_kmh);
@@ -76,6 +73,7 @@ void GuiPlotter::realtimeSleep(double timelapse) {
     }
 }
 
+// THIS LOOP WILL EXIT IF: user closes window, or main thread sets running_ to false.
 void GuiPlotter::guiLoop() {
     if (!glfwInit()) {
         std::cerr << "[GuiPlotter] Failed to initialize GLFW.\n";
@@ -99,8 +97,14 @@ void GuiPlotter::guiLoop() {
 
     bool zoom_out_full = false;
 
-    while (running_ && !glfwWindowShouldClose(window)) {
+    // --- Main GUI Loop ---
+    while (running_) {
         glfwPollEvents();
+        if (glfwWindowShouldClose(window)) {
+            running_ = false; // break out of the loop if user closes window!
+            break;
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -132,6 +136,11 @@ void GuiPlotter::guiLoop() {
             ImGui::Text("EKF Speed: %.2f km/h", speed);
         else
             ImGui::Text("Speed: N/A");
+
+        // --- Quit button for user ---
+        if (ImGui::Button("Quit")) {
+            glfwSetWindowShouldClose(window, true);
+        }
 
         if ((!ekf.xs.empty() && !ekf.ys.empty()) || (!meas.xs.empty() && !meas.ys.empty())) {
             ImVec2 plot_size = ImGui::GetContentRegionAvail();

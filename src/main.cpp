@@ -36,6 +36,11 @@ int main(int argc, char* argv[]) {
         plotter.startGui(); // Launch background GUI thread
 
         while (auto data = parser.next()) {
+            if (!plotter.isRunning()) {
+                std::cout << "[Main] GUI closed, stopping processing.\n";
+                break;
+            }
+
             auto state = ekfProcessor.process(*data);
             plotter.handleData(*data, state);
             plotter.realtimeSleep(data->timelapse);

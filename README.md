@@ -6,8 +6,26 @@ NavStream is a C++ Extended Kalman Filter (EKF) framework for vehicle localizati
 
 ## Build Instructions
 
+### **Linux**
+
+**Requires:** [Docker](https://docs.docker.com/get-docker/)
+
+Build and run with:
+```sh
+docker build -t navstream .
+./run.sh
+```
+Or,
+
 ```sh
 cmake -S . -B build -G Ninja
+cmake --build build
+```
+
+### **Windows**
+
+```sh
+cmake -S . -B build -G "Ninja"
 cmake --build build
 ```
 
@@ -16,9 +34,9 @@ cmake --build build
 ## Run Example
 
 ```sh
-.\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0013_gps_loss/oxts oxts_out.csv ekf_out.csv
-.\NavStream.exe ../data/2011_09_26/2011_09_26_drive_0001_unsync/oxts oxts_out.csv ekf_out.csv
-.\NavStream.exe ../data/2011_10_03/2011_10_03_drive_0042_unsync_gps_loss/oxts oxts_out.csv ekf_out.csv
+./NavStream ../data/2011_09_26/2011_09_26_drive_0013_gps_loss/oxts oxts_out.csv ekf_out.csv
+./NavStream ../data/2011_09_26/2011_09_26_drive_0001_unsync/oxts oxts_out.csv ekf_out.csv
+./NavStream ../data/2011_10_03/2011_10_03_drive_0042_unsync_gps_loss/oxts oxts_out.csv ekf_out.csv
 ```
 
 - **First argument:** Path to OXTS directory (e.g., from KITTI dataset)
@@ -103,5 +121,3 @@ When GNSS is lost or degraded, the EKF prediction model uses only IMU and last k
 ## License
 
 MIT License.
-
----
