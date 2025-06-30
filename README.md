@@ -4,6 +4,11 @@ NavStream is a C++ Extended Kalman Filter (EKF) framework for vehicle localizati
 
 ---
 
+
+
+pip install torch
+
+
 ## Build Instructions
 
 ### **Linux**
@@ -120,4 +125,4 @@ When GNSS is lost or degraded, the EKF prediction model uses only IMU and last k
 
 ## License
 
-MIT License.
+Licensed under Apache 2.0. Attribution required.
