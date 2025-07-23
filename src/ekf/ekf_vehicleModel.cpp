@@ -7,29 +7,64 @@
 namespace ekf {
 
 namespace {
-// ormalization to keep yaw within [-π, π].
+// Normalization to keep yaw within [-π, π].
 inline double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
 }
 }
 
-VehicleEKF::VehicleEKF() 
-    : x_(Eigen::VectorXd::Zero(6)),
-      P_(Eigen::MatrixXd::Identity(6, 6)),
-      Q_(Eigen::MatrixXd::Zero(6, 6)) 
-{
-    setNoiseParams(NoiseParams{});
+// Helper to get or default from map
+static double getOrDef(const std::map<std::string, double>& m, const std::string& k, double def) {
+    auto it = m.find(k);
+    return it == m.end() ? def : it->second;
 }
 
-void VehicleEKF::setNoiseParams(const NoiseParams& np) {
-    noise_ = np;
+VehicleEKF::VehicleEKF()
+    : x_(Eigen::VectorXd::Zero(6)),
+      P_(Eigen::MatrixXd::Identity(6, 6)),
+      Q_(Eigen::MatrixXd::Zero(6, 6)),
+      proc_noise_({
+          {"latitude", 1e-6},
+          {"longitude", 1e-6},
+          {"velocity", 0.1},
+          {"yaw", 0.001},
+          {"accel_fwd", 0.1},
+          {"yaw_rate", 0.001}
+      }),
+      meas_noise_({
+          {"gnss", 2e-6},
+          {"velocity", 0.04},
+          {"yaw", 0.0025},
+          {"accel_fwd", 0.1},
+          {"yaw_rate", 0.001}
+      })
+{
+    setProcessNoiseParams(proc_noise_);
+    setMeasurementNoiseParams(meas_noise_);
+}
+
+void VehicleEKF::setProcessNoiseParams(const std::map<std::string, double>& q) {
+    proc_noise_ = q;
+    // Diagonal Q based on keys
     Q_.setZero();
-    Q_(0,0) = noise_.lat_var;
-    Q_(1,1) = noise_.lon_var;
-    Q_(2,2) = noise_.v_var;
-    Q_(3,3) = noise_.yaw_var;
-    Q_(4,4) = noise_.af_var;
-    Q_(5,5) = noise_.wz_var;
+    Q_(0,0) = getOrDef(proc_noise_, "latitude", 1e-6);
+    Q_(1,1) = getOrDef(proc_noise_, "longitude", 1e-6);
+    Q_(2,2) = getOrDef(proc_noise_, "velocity", 0.1);
+    Q_(3,3) = getOrDef(proc_noise_, "yaw", 0.001);
+    Q_(4,4) = getOrDef(proc_noise_, "accel_fwd", 0.1);
+    Q_(5,5) = getOrDef(proc_noise_, "yaw_rate", 0.001);
+}
+
+void VehicleEKF::setMeasurementNoiseParams(const std::map<std::string, double>& r) {
+    meas_noise_ = r;
+}
+
+std::map<std::string, double> VehicleEKF::getProcessNoiseParamMap() const {
+    return proc_noise_;
+}
+
+std::map<std::string, double> VehicleEKF::getMeasurementNoiseParamMap() const {
+    return meas_noise_;
 }
 
 void VehicleEKF::initialize(const Eigen::VectorXd& x0, const Eigen::MatrixXd& P0) {

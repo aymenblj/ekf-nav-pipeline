@@ -1,4 +1,5 @@
 #include "ekf/ekf_processor.hpp"
+#include "ekf/ekf_vehicleModel.hpp"
 #include <stdexcept>
 #include <cmath>
 #include <limits>
@@ -15,7 +16,7 @@ Eigen::VectorXd convertToMeasurement(const utils::OXTSData& data) {
 } // namespace
 
 EKFProcessor::EKFProcessor(std::unique_ptr<IEKF> ekf, const std::string& logCSV)
-    : ekf_(std::move(ekf)), resultCSVPath_(logCSV) 
+    : ekf_(std::move(ekf)), resultCSVPath_(logCSV)
 {
     if (!resultCSVPath_.empty()) {
         logger_.emplace(resultCSVPath_, std::vector<std::string>{
@@ -42,31 +43,38 @@ Eigen::VectorXd EKFProcessor::process(const utils::OXTSData& data) {
         ekf_->predict(dt, data.af, data.wz);
 
         // EKF update steps: only update with available (non-NaN) measurements
+        // If the implementation supports, dynamic_cast to access known keys
+        std::map<std::string, double> meas_noise;
+        if (auto* veh_ekf = dynamic_cast<VehicleEKF*>(ekf_.get())) {
+            meas_noise = veh_ekf->getMeasurementNoiseParamMap();
+        }
+
         if (data.hasGPS()) {
             Eigen::Vector2d gnss_pos(data.lat, data.lon);
-            Eigen::Matrix2d R_gnss = Eigen::Matrix2d::Identity() * 2.0e-6;
+            double r_val = meas_noise.count("gnss") ? meas_noise["gnss"] : 2e-6;
+            Eigen::Matrix2d R_gnss = Eigen::Matrix2d::Identity() * r_val;
             ekf_->updateGNSS(gnss_pos, R_gnss);
         }
 
         double v_meas = std::hypot(data.ve, data.vn);
         if (!std::isnan(v_meas)) {
-            double R_v = 0.04; // (m/s)^2
-            ekf_->updateVelocity(v_meas, R_v);
+            double r_val = meas_noise.count("velocity") ? meas_noise["velocity"] : 0.04;
+            ekf_->updateVelocity(v_meas, r_val);
         }
 
         if (!std::isnan(data.yaw)) {
-            double R_yaw = 0.0025; // rad^2
-            ekf_->updateYaw(data.yaw, R_yaw);
+            double r_val = meas_noise.count("yaw") ? meas_noise["yaw"] : 0.0025;
+            ekf_->updateYaw(data.yaw, r_val);
         }
 
         if (!std::isnan(data.af)) {
-            double R_af = 0.1; // (m/s^2)^2
-            ekf_->updateAccel(data.af, R_af);
+            double r_val = meas_noise.count("accel_fwd") ? meas_noise["accel_fwd"] : 0.1;
+            ekf_->updateAccel(data.af, r_val);
         }
 
         if (!std::isnan(data.wz)) {
-            double R_wz = 0.001; // (rad/s)^2
-            ekf_->updateYawRate(data.wz, R_wz);
+            double r_val = meas_noise.count("yaw_rate") ? meas_noise["yaw_rate"] : 0.001;
+            ekf_->updateYawRate(data.wz, r_val);
         }
     }
 

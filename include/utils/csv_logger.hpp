@@ -15,7 +15,7 @@
  * @brief CSV Logger utility for writing tabular data to a file.
  */
 
-namespace utils {
+namespace io {
 
 #if __cplusplus >= 202002L
 // Concept: Type can be streamed to an ostream (e.g., std::cout << x)
@@ -31,7 +31,7 @@ concept OStreamable = requires(std::ostream& os, T&& t) {
  *
  * Example usage:
  * @code
- *   utils::Logger logger("output.csv", {"time", "lat", "lon"});
+ *   io::Logger logger("output.csv", {"time", "lat", "lon"});
  *   logger.logRow(123.45, 49.01, 8.43);
  * @endcode
  *
@@ -105,4 +105,4 @@ private:
     }
 };
 
-} // namespace utils
+} // namespace io

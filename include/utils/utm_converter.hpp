@@ -64,6 +64,13 @@ public:
      * @return Pair (x, y) in meters relative to (lat0, lon0).
      */
     static std::pair<double, double> latlonToLocalXY(double latitude, double longitude, double lat0, double lon0);
+
+    static void latlonToUTM(double latitude, double longitude, double& easting, double& northing, int& zone, bool& northp) {
+        double alt;
+        char zoneLetter;
+        std::tie(easting, northing, zone, zoneLetter, alt) = geodeticToUTM(latitude, longitude, 0.0);
+        northp = (zoneLetter >= 'N');
+    }
 };
 
 } // namespace utils

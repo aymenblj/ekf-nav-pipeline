@@ -57,4 +57,14 @@ FetchContent_Declare(
 # set(EIGEN_BUILD_DOCS OFF CACHE BOOL "Don't build Eigen docs")
 FetchContent_MakeAvailable(eigen)
 
-# Check if available...
+# nlohmann_json (header-only)
+set(NLOHMANN_JSON_LOCATION ${EXTERNAL_LOCATION}/nlohmann_json)
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG        v3.11.3
+  SOURCE_DIR     ${NLOHMANN_JSON_LOCATION}/src
+  BINARY_DIR     ${NLOHMANN_JSON_LOCATION}/build
+  SUBBUILD_DIR   ${NLOHMANN_JSON_LOCATION}/subbuild
+)
+FetchContent_MakeAvailable(nlohmann_json)

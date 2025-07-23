@@ -1,5 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
+#include <map>
+#include <string>
 
 namespace ekf {
 
@@ -12,6 +14,18 @@ namespace ekf {
 class IEKF {
 public:
     virtual ~IEKF() = default;
+
+    /**
+     * @brief Set the process noise parameters.
+     * @param q Map of process noise parameter names and values.
+     */
+    virtual void setProcessNoiseParams(const std::map<std::string, double>& q) = 0;
+
+    /**
+     * @brief Set the measurement noise parameters.
+     * @param r Map of measurement noise parameter names and values.
+     */
+    virtual void setMeasurementNoiseParams(const std::map<std::string, double>& r) = 0;
 
     /**
      * @brief Initialize the filter state and covariance.

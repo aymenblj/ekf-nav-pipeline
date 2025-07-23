@@ -125,4 +125,5 @@ std::pair<double, double> UTMConverter::latlonToLocalXY(double latitude, double 
     std::tie(x0, y0, std::ignore, std::ignore, std::ignore) = geodeticToUTM(lat0, lon0, 0.0);
     return {x - x0, y - y0};
 }
-}
+
+} // namespace utils

@@ -2,9 +2,11 @@
 #include "ekf/ekf_vehicleModel.hpp"
 #include "ekf/ekf_processor.hpp"
 #include "gui/gui_plotter.hpp"
-#include <iostream>
+#include <utilsstream>
 #include <filesystem>
 #include <memory>
+#include <map>
+#include <string>
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
@@ -20,15 +22,27 @@ int main(int argc, char* argv[]) {
         utils::OXTSParser parser(oxts_dir, oxts_log_csv);
 
         auto vehicle_ekf = std::make_unique<ekf::VehicleEKF>();
-        ekf::VehicleEKF::NoiseParams noise;
-        noise.lat_var = 1e-6;
-        noise.lon_var = 1e-6;
-        noise.v_var = 0.1;
-        noise.yaw_var = 0.001;
-        noise.gnss_var = 2e-6;
-        noise.vel_var = 0.04;
-        noise.yaw_meas_var = 0.0025;
-        vehicle_ekf->setNoiseParams(noise);
+        
+        // Set process noise (Q)
+        std::map<std::string, float> process_noise = {
+            {"latitude", 1e-6},
+            {"longitude", 1e-6},
+            {"velocity", 0.1},
+            {"yaw", 0.001},
+            {"accel_fwd", 0.1},
+            {"yaw_rate", 0.001}
+        };
+        vehicle_ekf->setProcessNoiseParams(process_noise);
+
+        // Set measurement noise (R)
+        std::map<std::string, float> meas_noise = {
+            {"gnss", 2e-6},
+            {"velocity", 0.04},
+            {"yaw", 0.0025},
+            {"accel_fwd", 0.1},
+            {"yaw_rate", 0.001}
+        };
+        vehicle_ekf->setMeasurementNoiseParams(meas_noise);
 
         ekf::EKFProcessor ekfProcessor(std::move(vehicle_ekf), ekf_result_csv);
 
@@ -52,7 +66,7 @@ int main(int argc, char* argv[]) {
 
         plotter.stopGui(); // Clean up and exit GUI
 
-    } catch (const std::exception& ex) {
+    } catch (const std::exceptutilsn& ex) {
         std::cerr << "Fatal error: " << ex.what() << "\n";
         return 1;
     }

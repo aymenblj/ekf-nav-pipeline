@@ -45,11 +45,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${implot_SOURCE_DIR}
     ${glfw_SOURCE_DIR}/include
     ${EXTRA_INCLUDES}
+    ${nlohmann_json_SOURCE_DIR}/single_include # <-- Add this line for nlohmann_json header
 )
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         glfw
+        nlohmann_json::nlohmann_json # <-- Link nlohmann_json target if using FetchContent
 )
 
 # Cross-platform OpenGL linking
